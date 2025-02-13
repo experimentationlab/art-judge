@@ -4,6 +4,7 @@ import base64
 from PIL import Image
 import numpy as np
 import io
+from eth_utils import keccak
 
 def encode_image(image_path):
     """
@@ -37,13 +38,13 @@ def create_test_payload(img_b64):
     """
     payload = {
         "image": img_b64,
-        "theme": "smiley_face"
+        "theme": "cat"
     }
     return json.dumps(payload).encode('utf-8').hex()
 
 def main():
     # Configuration
-    caller_address = "0x162A433068F51e18b7d13932F27e66a3f99E6890"
+    caller_address = "0xdbC43Ba45381e02825b14322cDdd15eC4B3164E6"
     
     # Test configurations
     tests = [
@@ -51,7 +52,6 @@ def main():
             "name": "random",
             "path": "../assets/smiley_face.png"
         }
-
     ]
     
     # Run tests for each configuration
@@ -65,6 +65,10 @@ def main():
             # Create the payload
             hex_payload = create_test_payload(img_b64)
             
+            # Calculate and log payload hash
+            payload_hash = f"0x{keccak(hexstr=hex_payload).hex()}"
+            print(f"\nPayload Hash (for getters): {payload_hash}")
+            
             # Construct the cast command
             cmd = [
                 "cast",
@@ -72,7 +76,7 @@ def main():
                 "--mnemonic",
                 "test test test test test test test test test test test junk",
                 "--mnemonic-index",
-                "5",
+                "3",
                 "--rpc-url",
                 "http://localhost:8545",
                 caller_address,
@@ -82,8 +86,11 @@ def main():
             
             # Execute the command
             result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+            print(f"\nTransaction Hash: {result.stdout.strip()}")
             print(f"Success testing {test['name']}!")
-            print(result.stdout)
+            
+            print("\nTo test getters, run:")
+            print(f"python test_getters.py {caller_address} {payload_hash}")
             
         except Exception as e:
             print(f"Error testing {test['name']}: {e}")

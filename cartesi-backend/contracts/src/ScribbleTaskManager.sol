@@ -101,10 +101,22 @@ contract ScribbleTaskManager is CoprocessorAdapter {
             
             UserData storage userData_ = userData[user];
             
+            // Add user to participants array if first time
+            if (userData_.challengesPassed == 0) {
+                participants.push(user);
+            }
+            
             if (passed) {
                 userData_.challengesPassed++;
                 userData_.themeHistory.push(theme);
-                userData_.globalScore = (userData_.globalScore + confidence) / 2;
+                
+                // For first challenge, set score directly
+                if (userData_.challengesPassed == 1) {
+                    userData_.globalScore = confidence;
+                } else {
+                    // For subsequent challenges, take average
+                    userData_.globalScore = (userData_.globalScore + confidence) / 2;
+                }
 
                 emit Debug_UserUpdate(
                     user,

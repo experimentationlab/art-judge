@@ -3,6 +3,7 @@ import json
 import sys
 from eth_abi import decode
 from hexbytes import HexBytes
+from eth_utils import event_abi_to_log_topic
 
 # Connect to your network (update RPC URL as needed)
 w3 = Web3(Web3.HTTPProvider('http://localhost:8545'))
@@ -35,38 +36,53 @@ def decode_notice_data(hex_data):
 
 def format_event(event):
     """Format event data for better readability"""
-    event_name = event['event']
-    if event_name == 'NoticeReceived':
-        return {
-            'event': event_name,
-            'payloadHash': HexBytes(event['args']['payloadHash']).hex(),
-            'user': event['args']['user'],
-            'notice_data': decode_notice_data(event['args']['notice'].hex())
-        }
-    elif event_name == 'Debug_NoticeReceived':
-        return {
-            'event': event_name,
-            'payloadHash': HexBytes(event['args']['payloadHash']).hex(),
-            'message': event['args']['message'],
-            'notice_hex': event['args']['notice'].hex()
-        }
-    elif event_name == 'Debug_DecodingSuccess':
-        return {
-            'event': event_name,
-            'result': event['args']['result'],
-            'theme': event['args']['theme'],
-            'classesLength': event['args']['classesLength'],
-            'probabilitiesLength': event['args']['probabilitiesLength']
-        }
-    elif event_name == 'Debug_UserUpdate':
-        return {
-            'event': event_name,
-            'user': event['args']['user'],
-            'passed': event['args']['passed'],
-            'newScore': event['args']['newScore'],
-            'totalPassed': event['args']['totalPassed']
-        }
-    return event
+    try:
+        event_name = event.get('event')
+        if not event_name or not event.get('args'):
+            print(f"Warning: Malformed event data: {event}")
+            return event
+
+        args = event['args']
+        
+        if event_name == 'NoticeReceived':
+            return {
+                'event': event_name,
+                'payloadHash': HexBytes(args['payloadHash']).hex(),
+                'user': args['user'],
+                'notice_data': decode_notice_data(args['notice'].hex())
+            }
+        elif event_name == 'Debug_NoticeReceived':
+            return {
+                'event': event_name,
+                'payloadHash': HexBytes(args['payloadHash']).hex(),
+                'message': args['message'],
+                'notice_hex': args['notice'].hex()
+            }
+        elif event_name == 'Debug_DecodingSuccess':
+            return {
+                'event': event_name,
+                'result': args['result'],
+                'theme': args['theme'],
+                'classesLength': args['classesLength'],
+                'probabilitiesLength': args['probabilitiesLength']
+            }
+        elif event_name == 'Debug_UserUpdate':
+            return {
+                'event': event_name,
+                'user': args['user'],
+                'passed': args['passed'],
+                'newScore': args['newScore'],
+                'totalPassed': args['totalPassed']
+            }
+        return event
+    except Exception as e:
+        print(f"Error formatting event: {str(e)}")
+        print(f"Raw event data: {event}")
+        return event
+
+def get_event_topic(event):
+    """Get the topic hash for an event"""
+    return event_abi_to_log_topic(event.abi)
 
 def get_events(contract_address, from_block=0, to_block='latest'):
     """Get and decode all events from the contract"""
@@ -83,12 +99,21 @@ def get_events(contract_address, from_block=0, to_block='latest'):
     for event_name in event_names:
         try:
             event = getattr(contract.events, event_name)
-            event_filter = event.create_filter(fromBlock=from_block, toBlock=to_block)
+            # Get event topic hash
+            topic = get_event_topic(event)
+            
+            logs = w3.eth.get_logs({
+                'address': contract_address,
+                'fromBlock': from_block,
+                'toBlock': to_block,
+                'topics': [topic]
+            })
             
             print(f"\nFetching {event_name} events...")
-            for evt in event_filter.get_all_entries():
+            for log in logs:
+                evt = event.process_log(log)
                 formatted = format_event(evt)
-                print(f"\nBlock #{evt['blockNumber']} - Tx: {evt['transactionHash'].hex()}")
+                print(f"\nBlock #{log['blockNumber']} - Tx: {log['transactionHash'].hex()}")
                 print(json.dumps(formatted, indent=2))
         except Exception as e:
             print(f"Error fetching {event_name} events: {str(e)}")
@@ -97,34 +122,42 @@ def get_events_by_user(contract_address, user_address, from_block=0, to_block='l
     """Get all events related to a specific user"""
     contract = w3.eth.contract(address=contract_address, abi=abi)
     
-    # Filter NoticeReceived events by user
-    event_filter = contract.events.NoticeReceived.create_filter(
-        fromBlock=from_block,
-        toBlock=to_block,
-        argument_filters={'user': user_address}
-    )
+    event = contract.events.NoticeReceived
+    topic = get_event_topic(event)
+    user_topic = '0x' + '0' * 24 + user_address[2:]
     
-    for evt in event_filter.get_all_entries():
+    logs = w3.eth.get_logs({
+        'address': contract_address,
+        'fromBlock': from_block,
+        'toBlock': to_block,
+        'topics': [topic, None, user_topic]
+    })
+    
+    for log in logs:
+        evt = event.process_log(log)
         formatted = format_event(evt)
-        print(f"\nBlock #{evt['blockNumber']} - Tx: {evt['transactionHash'].hex()}")
+        print(f"\nBlock #{log['blockNumber']} - Tx: {log['transactionHash'].hex()}")
         print(json.dumps(formatted, indent=2))
 
 def get_events_by_hash(contract_address, payload_hash, from_block=0, to_block='latest'):
     """Get all events related to a specific payloadHash"""
     contract = w3.eth.contract(address=contract_address, abi=abi)
     
-    # Filter events by payloadHash
     for event_name in ['NoticeReceived', 'Debug_NoticeReceived']:
         event = getattr(contract.events, event_name)
-        event_filter = event.create_filter(
-            fromBlock=from_block,
-            toBlock=to_block,
-            argument_filters={'payloadHash': payload_hash}
-        )
+        topic = get_event_topic(event)
         
-        for evt in event_filter.get_all_entries():
+        logs = w3.eth.get_logs({
+            'address': contract_address,
+            'fromBlock': from_block,
+            'toBlock': to_block,
+            'topics': [topic, payload_hash]
+        })
+        
+        for log in logs:
+            evt = event.process_log(log)
             formatted = format_event(evt)
-            print(f"\nBlock #{evt['blockNumber']} - Tx: {evt['transactionHash'].hex()}")
+            print(f"\nBlock #{log['blockNumber']} - Tx: {log['transactionHash'].hex()}")
             print(json.dumps(formatted, indent=2))
 
 if __name__ == "__main__":
