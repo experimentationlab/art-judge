@@ -4,39 +4,195 @@ This is backend for a Cartesi DApp that judges user drawn artwork. It uses pytho
 
 ### Inputs
 
-The DApp currently accepts below JSON input:
+The DApp accepts a JSON input with the following format:
 
 ```json
-{"compressed_doodle": "...", "type": "circle"}
+{
+    "image": "<base64-encoded-png>",
+    "theme": "apple"
+}
 ```
 
-The `compressed_doodle` is a base64 encoded string of the user's drawing. The `type` is a string that is `circle` shape(more shapes will be added in the future).
+- `image`: Base64 encoded PNG of the user's drawing
+- `theme`: Target class name from [class_names.txt](./model/class_names.txt)
 
 ### Outputs
 
-The DApp will output a JSON object with the following signature:
+The DApp outputs an ABI encoded tuple with the following structure:
+```solidity
+(uint256 result, string theme, string[] classes, uint256[] probabilities)
+```
 
+#### PASS Case (When drawing matches theme with >90% confidence)
 ```json
-{"score": 0.585625472333774, "message": "Your circle scored 58% accuracy."}
+{
+    "result": 95,              // Confidence score (>0 indicates pass)
+    "theme": "apple",          // Matched theme
+    "classes": [               // Top 3 predictions
+        "apple",
+        "circle",
+        "face"
+    ],
+    "probabilities": [         // Corresponding confidence scores
+        95,
+        3,
+        2
+    ]
+}
+```
+
+#### FAIL Case (When drawing doesn't match or confidence is low)
+```json
+{
+    "result": 0,              // 0 indicates fail
+    "theme": "",              // Empty theme on fail
+    "classes": [              // Still shows top 3 predictions
+        "circle",
+        "apple",
+        "face"
+    ],
+    "probabilities": [        // Actual confidence scores
+        85,
+        10,
+        5
+    ]
+}
 ```
 
 ## Running the backend
 
-**NOTE:** Before you build the backend inside the Cartesi Machine, make sure you're using the RISC-V wheels for OpenCV and NumPy in the `requirements.txt` file.
+This guide uses `cartesi-coprocessor` CLI to build and publish the backend machine. Follow docs [here](https://docs.mugen.builders/cartesi-co-processor-tutorial/installation) to install the CLI and pre-requisites.
 
-Inside the `cartesi-backend` directory, run the following command to build the backend:
-
-```bash
-cartesi build
-```
-
-Spin up the devnet environment:
+Before you build the backend, make sure coprocessor devnet is running otherwise run the following command in a separate terminal:
 
 ```bash
-cartesi run
+cartesi-coprocessor start-devnet
 ```
 
-Now, use `cartesi send` command to send the JSON input to the DApp:
+Inside the `cartesi-backend` directory, run the following command to build and publish the backend machine:
+
+```bash
+cartesi-coprocessor publish --network devnet
+```
+
+Get the machine hash from the output of the above command and use it in the `contracts` directory to deploy the `ScribbleTaskManager` contract.
+
+Inside the `contracts` directory, run the following command to deploy the contract:
+
+```bash
+cartesi-coprocessor deploy --contract-name ScribbleTaskManager --network devnet --constructor-args <task_issuer> <machine_hash>
+```
+To get task issuer address for above command, run:
+```bash
+cartesi-coprocessor address-book
+```
+
+Awesome! Now you can use the contract function `runExecution()` to issue tasks to the DApp.
+
+## Testing
+
+### Send Input JSON
+Navigate to the `tests` directory and edit the `test_input.py`.
+
+- Update `caller_address` with ScribbleTaskManager contract address 
+- You can modify the payload with image path and theme
+- You can change the sender address in the cast command
+
+After editing, run the following command to test:   
+```bash
+python3 test_input.py
+```
+You can check dapp logs in the Docker-Desktop container named `cartesi-coprocessor-operator`.
+
+### Get Output from Contract
+Inside the same `tests` directory, you can run the following command to get the output from the contract:
+```bash
+python3 test_getters.py <contract_address> <payload_hash>
+```
+
+- `contract_address`: ScribbleTaskManager contract address
+- `payload_hash`: Hash of the payload sent to the contract logged by `test_input.py` script
+
+## Contract - Public Read Functions
+
+The ScribbleTaskManager contract provides the following view functions to query state:
+
+### `getNoticeResult`
+Returns the validation result for a specific task.
+
+```solidity
+function getNoticeResult(bytes32 payloadHash) external view returns (
+    bool passed,              // Whether the validation passed
+    string memory theme,      // Matched theme (empty if failed)
+    uint256 confidence,       // Confidence score
+    Prediction[3] memory predictions  // Top 3 predictions with scores
+)
+```
+
+Example response:
+```json
+{
+    "passed": true,
+    "theme": "apple",
+    "confidence": 95,
+    "predictions": [
+        {"class": "apple", "probability": 95},
+        {"class": "circle", "probability": 3},
+        {"class": "face", "probability": 2}
+    ]
+}
+```
+
+### `getUserData`
+Returns the performance data for a specific user.
+
+```solidity
+function getUserData(address user) external view returns (
+    uint256 globalScore,      // Average score from all passed attempts
+    uint256 challengesPassed, // Total number of successful validations
+    string[] memory themeHistory  // History of passed themes
+)
+```
+
+Example response:
+```json
+{
+    "global_score": 92,
+    "challenges_passed": 3,
+    "theme_history": ["apple", "cat", "moon"]
+}
+```
+
+### `getLeaderboard`
+Returns global leaderboard data with user scores and challenges passed.
+
+```solidity
+function getLeaderboard() external view returns (
+    address[] memory addresses,  // Array of participant addresses
+    uint256[] memory scores,     // Array of global scores
+    uint256[] memory passed      // Array of challenges passed
+)
+```
+
+Example response:
+```json
+{
+    "addresses": [
+        "0x123...",
+        "0x456...",
+        "0x789..."
+    ],
+    "scores": [95, 87, 82],
+    "passed": [5, 3, 2]
+}
+```
+
+Note: The leaderboard arrays are aligned - i.e., `scores[i]` and `passed[i]` correspond to `addresses[i]`.
+
+
+
+
+
 
 
 
