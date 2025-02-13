@@ -1,195 +1,123 @@
 from os import environ
-import logging, requests, json, base64, cv2, numpy as np
+import logging, requests, json, base64
+import numpy as np
+from PIL import Image
+import tflite_runtime.interpreter as tflite
+import io
+from eth_abi import encode
 
 logging.basicConfig(level="INFO")
 logger = logging.getLogger(__name__)
 rollup_server = environ["ROLLUP_HTTP_SERVER_URL"]
 logger.info(f"HTTP rollup_server url is {rollup_server}")
 
-# Load reference vectors
-logger.info("Loading reference vectors")
-all_penguin_vectors = np.load("./dataset/penguin_bitmap.npy")  # shape (N, 784)
-REFERENCE_VECTOR = np.mean(all_penguin_vectors, axis=0)
-logger.info("Reference vectors loaded successfully")
-
-def preprocess_image(base64_data):
-    logger.info("Preprocessing image")
+def load_and_preprocess_image(base64_data, debug=True):
+    """
+    Load and preprocess image from base64 data
+    """
     try:
         # Decode base64 to bytes
         img_bytes = base64.b64decode(base64_data)
         
-        # Convert byte data to numpy array
-        nparr = np.frombuffer(img_bytes, np.uint8)
+        # Open image with PIL and convert to grayscale
+        img = Image.open(io.BytesIO(img_bytes)).convert("L")
+        if debug:
+            logger.info(f"Original image size: {img.size}")
+
+        # Resize to 28x28
+        if img.size != (28, 28):
+            img = img.resize((28, 28), Image.BILINEAR)
+            if debug:
+                logger.info(f"Resized image size: {img.size}")
+
+        # Convert to numpy array
+        img_np = np.array(img, dtype=np.float32)
+        if debug:
+            logger.info(f"Numpy array shape: {img_np.shape}")
+            logger.info(f"Value range before normalization: {img_np.min():.1f} to {img_np.max():.1f}")
+
+        # Normalize and invert (Quick Draw expects 0=black, 1=white)
+        img_np = img_np / 255.0
+        img_np = 1.0 - img_np  # Invert the colors
         
-        # Decode image using OpenCV
-        img = cv2.imdecode(nparr, cv2.IMREAD_GRAYSCALE)
-        if img is None:
-            raise ValueError("Failed to decode image")
-            
-        return img
+        # Enhance contrast by thresholding
+        threshold = 0.2
+        img_np = np.where(img_np > threshold, 1.0, 0.0).astype(np.float32)
+        
+        if debug:
+            logger.info(f"Value range after normalization: {img_np.min():.3f} to {img_np.max():.3f}")
+
+        # Add batch and channel dimensions
+        img_np = np.expand_dims(img_np, axis=0)
+        img_np = np.expand_dims(img_np, axis=-1)
+        
+        if debug:
+            logger.info(f"Final shape: {img_np.shape}")
+            logger.info(f"Final value range: {img_np.min():.3f} to {img_np.max():.3f}")
+
+        return img_np
+
     except Exception as e:
         logger.error(f"Error preprocessing image: {e}")
         raise
 
-def normalize_and_flatten(img):
-    """Convert image to normalized flat vector"""
-    img_vector = img.astype(np.float32) / 255.0
-    return img_vector.flatten()
-
-def cosine_similarity_numpy(vec1, vec2):
+def run_inference(interpreter, image_array):
     """
-    Compute the cosine similarity between two 1D vectors using NumPy.
-    Returns a value between 0 and 1 (assuming non-negative normalized vectors).
+    Run inference using TFLite runtime
     """
-    dot_product = np.dot(vec1, vec2)
-    norm1 = np.linalg.norm(vec1)
-    norm2 = np.linalg.norm(vec2)
-    if norm1 == 0 or norm2 == 0:
-        return 0.0
-    score = dot_product / (norm1 * norm2)
-    return max(0.0, min(1.0, score))
-
-def check_circle_accuracy(img):
-    """
-    Analyze how close the drawing is to a perfect circle using radial analysis.
-    Returns a score between 0 and 1 (0% to 100%).
-    """
-    logger.info("Checking circle accuracy")
     try:
-        # Invert threshold for dark drawings on light background
-        _, binary = cv2.threshold(img, 127, 255, cv2.THRESH_BINARY_INV)
+        # Get input and output details
+        input_details = interpreter.get_input_details()
+        output_details = interpreter.get_output_details()
         
-        # Find contours
-        contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        
-        if not contours:
-            logger.error("No contours found in image")
-            return 0.0
-            
-        # Get the largest contour
-        contour = max(contours, key=cv2.contourArea)
-        
-        # Validate contour size
-        area = cv2.contourArea(contour)
-        img_area = img.shape[0] * img.shape[1]
-        area_ratio = area / img_area
-        
-        # If contour is too small or too large relative to image size, reject it
-        if area_ratio < 0.01 or area_ratio > 0.95:
-            logger.error(f"Invalid contour area ratio: {area_ratio:.3f}")
-            return 0.0
-        
-        # Calculate moments and centroid
-        M = cv2.moments(contour)
-        if M["m00"] == 0:
-            logger.error("Zero contour area")
-            return 0.0
-            
-        cX = int(M["m10"] / M["m00"])
-        cY = int(M["m01"] / M["m00"])
-        
-        # Compute distances and angles from the centroid to each contour point
-        distances = []
-        angles = []
-        for point in contour:
-            x, y = point[0]
-            dx = x - cX
-            dy = y - cY
-            dist = np.sqrt(dx*dx + dy*dy)
-            angle = np.arctan2(dy, dx)
-            distances.append(dist)
-            angles.append(angle)
-            
-        distances = np.array(distances)
-        angles = np.array(angles)
-        
-        # Ensure we have enough points for a meaningful analysis
-        if len(distances) < 8:
-            logger.error(f"Too few contour points: {len(distances)}")
-            return 0.0
-        
-        # Sort points by angle to analyze radius variation around the shape
-        sorted_indices = np.argsort(angles)
-        sorted_distances = distances[sorted_indices]
-        
-        # Compute radius variation score using a more stringent method
-        # Calculate variations between each point and the mean radius
-        mean_radius = np.mean(sorted_distances)
-        radius_deviations = np.abs(sorted_distances - mean_radius) / mean_radius
-        radial_score = np.exp(-5 * np.mean(radius_deviations))  # Exponential penalty for deviations
-        
-        # Aspect ratio score with exponential penalty
-        x, y, w, h = cv2.boundingRect(contour)
-        raw_aspect = min(w, h) / max(w, h)
-        aspect_ratio = np.exp(-5 * (1 - raw_aspect))  # Exponential penalty for non-square shapes
-        
-        # Area ratio score with stronger penalty
-        actual_area = cv2.contourArea(contour)
-        ideal_area = np.pi * mean_radius * mean_radius
-        raw_area_ratio = min(actual_area, ideal_area) / max(actual_area, ideal_area)
-        area_ratio = np.exp(-3 * (1 - raw_area_ratio))
-        
-        # Circularity score (4πA/P²) with exponential penalty
-        perimeter = cv2.arcLength(contour, True)
-        if perimeter > 0:
-            raw_circularity = 4 * np.pi * actual_area / (perimeter * perimeter)
-            circularity = np.exp(-3 * (1 - raw_circularity))
-        else:
-            circularity = 0
-            
-        # Combine all metrics with adjusted weights
-        weights = {
-            'radial': 0.35,    # Reduced slightly
-            'aspect': 0.25,    # Increased
-            'area': 0.15,      # Reduced
-            'circularity': 0.25  # Increased
-        }
-        
-        final_score = (
-            weights['radial'] * radial_score +
-            weights['aspect'] * aspect_ratio +
-            weights['area'] * area_ratio +
-            weights['circularity'] * circularity
-        )
-        
-        # Log detailed metrics
-        logger.info(f"""Circle metrics (percentages):
-            Radial uniformity: {radial_score * 100:.1f}%
-            Aspect ratio: {aspect_ratio * 100:.1f}%
-            Area ratio: {area_ratio * 100:.1f}%
-            Circularity: {circularity * 100:.1f}%
-            Final score: {final_score * 100:.1f}%
-        """)
-        
-        return final_score
-        
-    except Exception as e:
-        logger.error(f"Error checking circle accuracy: {e}")
-        return 0.0
+        logger.info("Model Input Details:")
+        logger.info(f"Shape: {input_details[0]['shape']}")
+        logger.info(f"Quantization: {input_details[0].get('quantization', 'None')}")
 
-def score_doodle(img, doodle_type):
-    """Score doodle based on type"""
-    logger.info(f"Scoring doodle of type: {doodle_type}")
-    
-    if doodle_type == "circle":
-        score = check_circle_accuracy(img)
-        message = f"Your circle scored {int(score * 100)}% accuracy."
-    
-    elif doodle_type == "penguin":
-        # Resize to 28x28 for penguin comparison
-        img_resized = cv2.resize(img, (28, 28))
-        user_vector = normalize_and_flatten(img_resized)
-        score = cosine_similarity_numpy(user_vector, REFERENCE_VECTOR)
-        message = f"Your penguin scored {int(score * 100)}% similarity to the ideal penguin."
-    
-    else:
-        raise ValueError(f"Unknown doodle type: {doodle_type}")
-    
-    return score, message
+        # Set the input tensor
+        interpreter.set_tensor(input_details[0]['index'], image_array)
+
+        # Run inference
+        interpreter.invoke()
+
+        # Get the output tensor
+        output_data = interpreter.get_tensor(output_details[0]['index'])
+        
+        return output_data[0]
+
+    except Exception as e:
+        logger.error(f"Error running inference: {e}")
+        raise
+
+def get_top_predictions(output_data, class_names_path, top_k=3):
+    """
+    Get top k predictions from the model output
+    """
+    try:
+        # Get indices of top k predictions
+        top_indices = output_data.argsort()[-top_k:][::-1]
+        
+        # Load class names
+        with open(class_names_path, 'r') as f:
+            class_names = [line.strip() for line in f.readlines()]
+        
+        results = []
+        for idx in top_indices:
+            results.append({
+                'class': class_names[idx],
+                'probability': float(output_data[idx] * 100)
+            })
+        
+        return results
+
+    except Exception as e:
+        logger.error(f"Error getting predictions: {e}")
+        raise
 
 def emit_notice(data):
     logger.info("Emitting notice")
     notice_payload = {"payload": data["payload"]}
+    
     response = requests.post(rollup_server + "/notice", json=notice_payload)
     if response.status_code in (200, 201):
         logger.info(f"Notice emitted successfully with data: {data}")
@@ -198,33 +126,77 @@ def emit_notice(data):
 
 def handle_advance(data):
     logger.info(f"Received advance request data {data}")
-    payload_hex = data['payload']
+    
     try:
+        # Decode payload
+        payload_hex = data['payload']
         payload_str = bytes.fromhex(payload_hex[2:]).decode('utf-8')
         payload = json.loads(payload_str)
         logger.info(f"Decoded payload: {payload}")
         
-        # Extract base64 doodle image and type
-        base64_doodle = payload.get("compressed_doodle")
-        doodle_type = payload.get("type", "penguin")  # default to penguin for backward compatibility
+        # Extract base64 image and expected class
+        base64_image = payload.get("image")
+        expected_class = payload.get("theme")
         
-        if not base64_doodle:
-            logger.error("No doodle provided in payload")
+        if not base64_image:
+            logger.error("No image provided in payload")
             return "reject"
             
-        # Preprocess and score
-        img = preprocess_image(base64_doodle)
-        score, message = score_doodle(img, doodle_type)
+        if not expected_class:
+            logger.error("No expected class provided in payload")
+            return "reject"
+
+        # Load TFLite model
+        interpreter = tflite.Interpreter(model_path="model.tflite")
+        interpreter.allocate_tensors()
+
+        # Preprocess image
+        img_array = load_and_preprocess_image(base64_image)
         
-        # Prepare output JSON
-        output = {
-            "score": score,
-            "message": message
-        }
+        # Run inference
+        output_data = run_inference(interpreter, img_array)
         
-        # Emit output as notice
-        output_payload = json.dumps(output)
-        emit_notice({"payload": output_payload})
+        # Get predictions
+        results = get_top_predictions(output_data, "class_names.txt")
+        
+        # Determine pass/fail result
+        top_prediction = results[0]
+        confidence_threshold = 90.0
+        
+        final_result = 1 if (
+            top_prediction['class'] == expected_class and 
+            top_prediction['probability'] >= confidence_threshold
+        ) else 0
+        
+        logger.info(f"Validation result: {final_result} (Expected: {expected_class}, "
+                   f"Got: {top_prediction['class']} with {top_prediction['probability']:.2f}% confidence)")
+        
+        if final_result == 1:
+            result = int(top_prediction['probability'])
+            theme = top_prediction['class']
+        else:
+            result = 0
+            theme = ""
+            
+        # Prepare prediction arrays
+        prediction_classes = [p['class'] for p in results[:3]]
+        prediction_probabilities = [int(p['probability']) for p in results[:3]]
+        
+        # Verify array lengths match before encoding
+        if len(prediction_classes) != 3 or len(prediction_probabilities) != 3:
+            # Pad arrays to length 3 if needed
+            prediction_classes = (prediction_classes + [""] * 3)[:3]
+            prediction_probabilities = (prediction_probabilities + [0] * 3)[:3]
+
+        # ABI encode the data
+        encoded_data = encode(
+            ['uint256', 'string', 'string[]', 'uint256[]'],
+            [result, theme, prediction_classes, prediction_probabilities]
+        )
+        
+        # Convert to hex and emit notice
+        hex_data = "0x" + encoded_data.hex()
+        emit_notice({"payload": hex_data})
         return "accept"
         
     except Exception as error:

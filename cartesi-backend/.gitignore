@@ -1,2 +1,4 @@
 .cartesi
 .venv
+assets/penguin_bitmap.npy
+output.*

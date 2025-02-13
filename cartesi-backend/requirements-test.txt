@@ -1,0 +1,5 @@
+pillow==10.1.0
+numpy==1.26.2
+web3==6.15.1
+eth-abi==5.2.0
+hexbytes==0.3.1 
