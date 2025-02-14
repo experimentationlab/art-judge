@@ -19,7 +19,13 @@
 }
 
 html,
-body {
+body,
+body > *,
+div[data-overlay-container="true"] {
+    height: 100%;
+}
+
+body > * {
     height: 100%;
 }
 

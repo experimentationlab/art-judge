@@ -2,7 +2,7 @@ import { Scribbl } from "@/components/Scribbl";
 
 export default function Home() {
     return (
-        <main className="flex flex-col gap-8 items-center sm:items-center pt-10">
+        <main className="flex flex-col items-center sm:items-center justify-center h-[calc(100%-4rem)]">
             <Scribbl />
         </main>
     );
