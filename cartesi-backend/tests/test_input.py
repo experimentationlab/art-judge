@@ -38,19 +38,19 @@ def create_test_payload(img_b64):
     """
     payload = {
         "image": img_b64,
-        "theme": "cat"
+        "theme": "circle"
     }
     return json.dumps(payload).encode('utf-8').hex()
 
 def main():
     # Configuration
-    caller_address = "0xdbC43Ba45381e02825b14322cDdd15eC4B3164E6"
+    caller_address = "0x36b58F5C1969B7b6591D752ea6F5486D069010AB"
     
     # Test configurations
     tests = [
         {
             "name": "random",
-            "path": "../assets/smiley_face.png"
+            "path": "../assets/cookie.png"
         }
     ]
     
@@ -76,7 +76,7 @@ def main():
                 "--mnemonic",
                 "test test test test test test test test test test test junk",
                 "--mnemonic-index",
-                "3",
+                "4",
                 "--rpc-url",
                 "http://localhost:8545",
                 caller_address,

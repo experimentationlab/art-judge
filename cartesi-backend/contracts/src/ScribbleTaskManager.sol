@@ -28,6 +28,7 @@ contract ScribbleTaskManager is CoprocessorAdapter {
     mapping(bytes32 => NoticeResult) private noticeResults;
     address[] private participants;
     mapping(bytes32 => address) private inputSenders;
+    mapping(address => bool) private isParticipant;
 
     constructor(address _taskIssuerAddress, bytes32 _machineHash)
         CoprocessorAdapter(_taskIssuerAddress, _machineHash)
@@ -101,9 +102,10 @@ contract ScribbleTaskManager is CoprocessorAdapter {
             
             UserData storage userData_ = userData[user];
             
-            // Add user to participants array if first time
-            if (userData_.challengesPassed == 0) {
+            // Add user to participants array only if not already added
+            if (!isParticipant[user]) {
                 participants.push(user);
+                isParticipant[user] = true;
             }
             
             if (passed) {

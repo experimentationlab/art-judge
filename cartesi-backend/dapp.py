@@ -89,7 +89,7 @@ def run_inference(interpreter, image_array):
         logger.error(f"Error running inference: {e}")
         raise
 
-def get_top_predictions(output_data, class_names_path, top_k=3):
+def get_top_predictions(output_data, class_names_path, top_k=10):
     """
     Get top k predictions from the model output
     """
@@ -156,29 +156,27 @@ def handle_advance(data):
         # Run inference
         output_data = run_inference(interpreter, img_array)
         
-        # Get predictions
+        # Get top 10 predictions
         results = get_top_predictions(output_data, "class_names.txt")
+        logger.info(f"Top 10 predictions: {results}")
         
-        # Determine pass/fail result
+        # Find probability of expected class in all predictions
+        expected_class_prob = 0
+        for pred in results:
+            if pred['class'] == expected_class:
+                expected_class_prob = int(pred['probability'])
+                break
+        
+        # Log validation result
         top_prediction = results[0]
-        confidence_threshold = 90.0
+        logger.info(f"Validation result: Expected '{expected_class}' got {expected_class_prob}% confidence. "
+                   f"(Top prediction: '{top_prediction['class']}' with {top_prediction['probability']:.2f}% confidence)")
         
-        final_result = 1 if (
-            top_prediction['class'] == expected_class and 
-            top_prediction['probability'] >= confidence_threshold
-        ) else 0
-        
-        logger.info(f"Validation result: {final_result} (Expected: {expected_class}, "
-                   f"Got: {top_prediction['class']} with {top_prediction['probability']:.2f}% confidence)")
-        
-        if final_result == 1:
-            result = int(top_prediction['probability'])
-            theme = top_prediction['class']
-        else:
-            result = 0
-            theme = ""
+        # Always return expected class and its probability
+        result = expected_class_prob
+        theme = expected_class
             
-        # Prepare prediction arrays
+        # Prepare top 3 predictions for contract storage
         prediction_classes = [p['class'] for p in results[:3]]
         prediction_probabilities = [int(p['probability']) for p in results[:3]]
         

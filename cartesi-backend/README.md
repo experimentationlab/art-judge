@@ -23,41 +23,31 @@ The DApp outputs an ABI encoded tuple with the following structure:
 (uint256 result, string theme, string[] classes, uint256[] probabilities)
 ```
 
-#### PASS Case (When drawing matches theme with >90% confidence)
+Example response:
 ```json
 {
-    "result": 95,              // Confidence score (>0 indicates pass)
-    "theme": "apple",          // Matched theme
-    "classes": [               // Top 3 predictions
-        "apple",
+    "result": 90,              // Probability of expected theme (0-100)
+    "theme": "apple",          // The expected theme
+    "classes": [
+        "apple",               // Top 3 predictions
         "circle",
         "face"
     ],
     "probabilities": [         // Corresponding confidence scores
-        95,
-        3,
-        2
-    ]
-}
-```
-
-#### FAIL Case (When drawing doesn't match or confidence is low)
-```json
-{
-    "result": 0,              // 0 indicates fail
-    "theme": "",              // Empty theme on fail
-    "classes": [              // Still shows top 3 predictions
-        "circle",
-        "apple",
-        "face"
-    ],
-    "probabilities": [        // Actual confidence scores
-        85,
-        10,
+        90,
+        5,
         5
     ]
 }
 ```
+
+The output always contains:
+- `result`: The probability (0-100) that the drawing matches the expected theme
+- `theme`: The expected theme from the input
+- `classes`: Top 3 predicted classes for the drawing
+- `probabilities`: Confidence scores for the top 3 predictions
+
+Note: The DApp searches through top 10 predictions to find the expected theme's probability, but only returns the top 3 predictions for context.
 
 ## Running the backend
 
