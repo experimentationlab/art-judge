@@ -27,7 +27,6 @@ export const ShinyEyesRobot: FC<IconProps> = ({ height, width }) => (
         width={width ?? imgOpts.width}
         src="/images/robot-shiny-eyes.png"
         alt="Scribbl robot with shiny eyes"
-        style={{ width: "auto", height: "auto" }}
     />
 );
 
