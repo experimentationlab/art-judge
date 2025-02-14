@@ -42,6 +42,7 @@ export const useCanvas = () => {
 
             return () => {
                 if (!c.disposed) {
+                    console.info("disposing the canvas!");
                     c.dispose();
                 }
             };

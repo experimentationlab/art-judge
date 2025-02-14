@@ -1,18 +1,19 @@
 "use client";
 import useWallet from "@/components/Wallet/useWallet";
 import {
-    useReadTaskManagerGetLeaderboard,
     useReadTaskManagerGetNoticeResult,
     useSimulateTaskManagerRunExecution,
     useWriteTaskManagerRunExecution,
 } from "@/contracts/generated/scribbleTaskManager";
-import { Button, Input, Link, Tooltip } from "@heroui/react";
+import { Button, Link, Tooltip } from "@heroui/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { motion, Transition } from "framer-motion";
 import { FC, useEffect, useState } from "react";
-import { FaEraser, FaPalette, FaPaperPlane, FaUndo } from "react-icons/fa";
+import { FaEraser, FaPaperPlane, FaUndo } from "react-icons/fa";
 import { Hex, isHex, keccak256, toHex } from "viem";
 import { useBlockNumber, useWaitForTransactionReceipt } from "wagmi";
+import { ThemeSelector } from "./ThemeSelector";
+import { ValidThemes } from "./themes";
 import { useCanvas } from "./useCanvas";
 
 const transition: Transition = {
@@ -42,12 +43,6 @@ const useResultReader = () => {
         console.log(`watching notice for payload: ${payload}`);
     }
 
-    const result = useReadTaskManagerGetLeaderboard();
-
-    console.log("START LEADERBOARD");
-    console.log(result.data);
-    console.log("END LEADERBOARD");
-
     const keccakked = isHex(payload) ? keccak256(payload) : null;
 
     const noticeResult = useReadTaskManagerGetNoticeResult({
@@ -74,7 +69,7 @@ export const Scribbl: FC = () => {
     const { isConnected, isReadyToSendTransaction, openChainModal, openConnectModal } = useWallet();
     const [payload, setPayload] = useState<Hex | null>(null);
     const { watchResultForPayload } = useResultReader();
-    const [theme, setTheme] = useState<string>("circle");
+    const [theme, setTheme] = useState<ValidThemes>("circle");
 
     const { clearCanvas, hasContent, prepareToExport, removeLastEntry, canvasRef, isReady } =
         useCanvas();
@@ -132,14 +127,7 @@ export const Scribbl: FC = () => {
             >
                 <div className="flex flex-col gap-2">
                     <div className="py-3 w-full">
-                        <Input
-                            value={theme}
-                            placeholder="Add the theme here! e.g. circle"
-                            radius="none"
-                            startContent={<FaPalette />}
-                            onValueChange={setTheme}
-                            isClearable
-                        />
+                        <ThemeSelector onValueChange={setTheme} selectedTheme={theme} />
                     </div>
                     <div className="flex justify-between gap-1">
                         <div className="flex gap-1">
