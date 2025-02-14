@@ -6,22 +6,20 @@ import {
     DropdownSection,
     DropdownTrigger,
 } from "@heroui/react";
-import { useChainModal, useConnectModal } from "@rainbow-me/rainbowkit";
 import { FC } from "react";
-import {
-    FaCaretDown,
-    FaExclamation,
-    FaSignOutAlt,
-    FaWallet,
-} from "react-icons/fa";
-import { useAccount, useDisconnect } from "wagmi";
+import { FaCaretDown, FaExclamation, FaSignOutAlt, FaWallet } from "react-icons/fa";
 import Address from "./Address";
+import useWallet from "./useWallet";
 
 export const ConnectButton: FC = () => {
-    const { isConnected, chain, address, connector } = useAccount();
-    const { disconnect } = useDisconnect();
-    const { openConnectModal } = useConnectModal();
-    const { openChainModal } = useChainModal();
+    const {
+        address,
+        disconnect,
+        isConnected,
+        onUnsupportedChain,
+        openChainModal,
+        openConnectModal,
+    } = useWallet();
 
     if (!isConnected)
         return (
@@ -35,13 +33,9 @@ export const ConnectButton: FC = () => {
             </Button>
         );
 
-    if (isConnected && !chain)
+    if (onUnsupportedChain)
         return (
-            <Button
-                color="danger"
-                startContent={<FaExclamation />}
-                onPress={openChainModal}
-            >
+            <Button color="danger" startContent={<FaExclamation />} onPress={openChainModal}>
                 Wrong Network
             </Button>
         );
@@ -59,10 +53,7 @@ export const ConnectButton: FC = () => {
                 </Button>
             </DropdownTrigger>
             <DropdownMenu aria-label="Actions">
-                <DropdownSection
-                    title="Session"
-                    className={!isConnected ? "hidden" : ""}
-                >
+                <DropdownSection title="Session" className={!isConnected ? "hidden" : ""}>
                     <DropdownItem
                         key="disconnect"
                         as={Button}

@@ -1,3 +1,3 @@
 ### Summary
 
-All the necessary contract ABI and wagmi generated code will live here.
+All the necessary contract ABI, function helpers and wagmi generated code (hooks) can be found here.
