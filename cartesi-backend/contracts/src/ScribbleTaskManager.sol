@@ -6,9 +6,9 @@ import "../lib/coprocessor-base-contract/src/CoprocessorAdapter.sol";
 contract ScribbleTaskManager is CoprocessorAdapter {
     // Structs
     struct UserData {
-        uint256 globalScore;      // Cumulative score from successful attempts
-        uint256 challengesPassed; // Total number of successful validations
-        string[] themeHistory;    // History of passed themes
+        uint256 globalScore;      // Average score from all attempts
+        uint256 totalAttempts;    // Total number of validation attempts
+        string[] themeHistory;    // History of unique themes attempted
     }
 
     struct Prediction {
@@ -29,6 +29,7 @@ contract ScribbleTaskManager is CoprocessorAdapter {
     address[] private participants;
     mapping(bytes32 => address) private inputSenders;
     mapping(address => bool) private isParticipant;
+    mapping(address => mapping(string => bool)) private userThemeAttempted;
 
     constructor(address _taskIssuerAddress, bytes32 _machineHash)
         CoprocessorAdapter(_taskIssuerAddress, _machineHash)
@@ -52,7 +53,7 @@ contract ScribbleTaskManager is CoprocessorAdapter {
         address indexed user,
         bool passed,
         uint256 newScore,
-        uint256 totalPassed
+        uint256 totalAttempts
     );
 
     function runExecution(bytes calldata input) external {
@@ -108,25 +109,30 @@ contract ScribbleTaskManager is CoprocessorAdapter {
                 isParticipant[user] = true;
             }
             
-            if (passed) {
-                userData_.challengesPassed++;
-                userData_.themeHistory.push(theme);
-                
-                // For first challenge, set score directly
-                if (userData_.challengesPassed == 1) {
-                    userData_.globalScore = confidence;
-                } else {
-                    // For subsequent challenges, take average
-                    userData_.globalScore = (userData_.globalScore + confidence) / 2;
-                }
+            // Track total attempts
+            userData_.totalAttempts++;
 
-                emit Debug_UserUpdate(
-                    user,
-                    passed,
-                    userData_.globalScore,
-                    userData_.challengesPassed
-                );
+            // Add theme to history if not already attempted
+            if (!userThemeAttempted[user][theme]) {
+                userData_.themeHistory.push(theme);
+                userThemeAttempted[user][theme] = true;
             }
+
+            // Update global score
+            if (userData_.totalAttempts == 1) {
+                // For first attempt, set score directly
+                userData_.globalScore = confidence;
+            } else {
+                // For subsequent attempts, take average
+                userData_.globalScore = (userData_.globalScore + confidence) / 2;
+            }
+
+            emit Debug_UserUpdate(
+                user,
+                passed,
+                userData_.globalScore,
+                userData_.totalAttempts
+            );
 
             // Clean up mapping
             delete inputSenders[payloadHash];
@@ -178,22 +184,18 @@ contract ScribbleTaskManager is CoprocessorAdapter {
             address participant = participants[i];
             addresses[i] = participant;
             scores[i] = userData[participant].globalScore;
-            passed[i] = userData[participant].challengesPassed;
+            passed[i] = userData[participant].totalAttempts;
         }
         return (addresses, scores, passed);
     }
 
     function getUserData(address user) external view returns (
-        uint256 globalScore,
-        uint256 challengesPassed,
-        string[] memory themeHistory
+        uint256 globalScore,      // Average score from all attempts
+        uint256 totalAttempts,    // Total number of attempts
+        string[] memory themeHistory  // History of unique themes attempted
     ) {
         UserData memory data = userData[user];
-        return (
-            data.globalScore,
-            data.challengesPassed,
-            data.themeHistory
-        );
+        return (data.globalScore, data.totalAttempts, data.themeHistory);
     }
 
     event NoticeReceived(
