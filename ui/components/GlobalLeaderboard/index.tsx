@@ -70,7 +70,7 @@ const useGetLeaderboardResults = () => {
         if (data) {
             setResults(prepareResults(data));
         }
-    }, []);
+    }, [data]);
 
     return {
         isLoading,
