@@ -4,8 +4,9 @@ import { react } from "@wagmi/cli/plugins";
 import { Abi, isAddress } from "viem";
 
 export default defineConfig(() => {
+    const fromProcess = process.env.NEXT_PUBLIC_COPROCESSOR_CALLER_ADDRESS;
     const env = loadEnv({ mode: process.env.NODE_ENV, envDir: process.cwd() }) as NodeJS.ProcessEnv;
-    const contractAddress = env.NEXT_PUBLIC_COPROCESSOR_CALLER_ADDRESS;
+    const contractAddress = fromProcess || env.NEXT_PUBLIC_COPROCESSOR_CALLER_ADDRESS;
 
     if (!isAddress(contractAddress))
         throw new Error(
