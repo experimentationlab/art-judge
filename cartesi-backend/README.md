@@ -79,7 +79,7 @@ cartesi-coprocessor address-book
 
 Awesome! Now you can use the contract function `runExecution()` to issue tasks to the DApp.
 
-## Testing
+## Testing(without UI)
 
 ### Send Input JSON
 Navigate to the `tests` directory and edit the `test_input.py`.
