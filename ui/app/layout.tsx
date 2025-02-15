@@ -7,9 +7,31 @@ import { Providers } from "@/providers/Providers";
 import "@rainbow-me/rainbowkit/styles.css";
 import "./globals.css";
 
+const title = "Scribbl";
+const description =
+    "Unleash your inner artist with Scribbl! Doodle your way to the top of the global leaderboard. Choose a theme, create your masterpiece, and let our AI judge decide. Join the fun!";
+const ogImageUrl = process.env.NEXT_PUBLIC_OG_IMAGE_URL || "";
+const webAppBaseUrl = process.env.WEB_APP_BASE_URL ?? "http://localhost:3000";
+const appType = "website";
+
 export const metadata: Metadata = {
-    title: "Scribbl App",
-    description: `Unleash your inner artist with Scribbl! Doodle your way to the top of the global leaderboard. Choose a theme, create your masterpiece, and let our AI judge decide. Join the fun!`,
+    title,
+    description,
+    openGraph: {
+        title,
+        description,
+        type: appType,
+        url: webAppBaseUrl,
+        siteName: title,
+        images: [ogImageUrl],
+    },
+    twitter: {
+        title,
+        description,
+        site: webAppBaseUrl,
+        images: [ogImageUrl],
+        card: "summary",
+    },
 };
 
 const gamjamRegular = Gamja_Flower({

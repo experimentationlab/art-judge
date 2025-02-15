@@ -26,5 +26,6 @@ declare namespace NodeJS {
 
         NEXT_PUBLIC_WWW_DOMAIN: string;
         NEXT_PUBLIC_PLAUSIBLE_DOMAIN: string;
+        WEB_APP_BASE_URL: string;
     }
 }
