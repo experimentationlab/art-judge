@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 
 const opts = {
     BASE_COLOR: "#000000",
-    BRUSH_SIZE: 25,
+    BRUSH_SIZE: 10,
 } as const;
 
 function setupDefault(canvas: Canvas) {
