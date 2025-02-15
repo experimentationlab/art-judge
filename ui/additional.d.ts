@@ -24,8 +24,24 @@ declare namespace NodeJS {
          */
         NEXT_PUBLIC_COPROCESSOR_CALLER_ADDRESS: string;
 
+        /**
+         * Opengraph image url.
+         */
+        OG_IMAGE_URL: string;
+
+        /**
+         * Meant for twitter image cards. In case it is not defined will default to whatever value is on
+         * OG_IMAGE_URL env var.
+         * @default OG_IMAGE_URL
+         */
+        TWT_IMAGE_URL: string;
+
         NEXT_PUBLIC_WWW_DOMAIN: string;
         NEXT_PUBLIC_PLAUSIBLE_DOMAIN: string;
+
+        /**
+         * The URL for the deployed app e.g. FQDN or IP.
+         */
         WEB_APP_BASE_URL: string;
     }
 }

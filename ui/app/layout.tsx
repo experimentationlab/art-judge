@@ -10,7 +10,8 @@ import "./globals.css";
 const title = "Scribbl";
 const description =
     "Unleash your inner artist with Scribbl! Doodle your way to the top of the global leaderboard. Choose a theme, create your masterpiece, and let our AI judge decide. Join the fun!";
-const ogImageUrl = process.env.NEXT_PUBLIC_OG_IMAGE_URL || "";
+const ogImageUrl = process.env.OG_IMAGE_URL || "";
+const twitterImageUrl = process.env.TWT_IMAGE_URL || ogImageUrl;
 const webAppBaseUrl = process.env.WEB_APP_BASE_URL ?? "http://localhost:3000";
 const appType = "website";
 
@@ -29,7 +30,7 @@ export const metadata: Metadata = {
         title,
         description,
         site: webAppBaseUrl,
-        images: [ogImageUrl],
+        images: [twitterImageUrl],
         card: "summary",
     },
 };
