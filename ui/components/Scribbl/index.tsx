@@ -1,19 +1,21 @@
 "use client";
 import useWallet from "@/components/Wallet/useWallet";
 import {
-    useReadTaskManagerGetNoticeResult,
+    taskManagerAbi,
     useSimulateTaskManagerRunExecution,
+    useWatchTaskManagerNoticeReceivedEvent,
     useWriteTaskManagerRunExecution,
 } from "@/contracts/generated/scribbleTaskManager";
-import { Button, Link, Tooltip } from "@heroui/react";
-import { useQueryClient } from "@tanstack/react-query";
+import { Button, Tooltip } from "@heroui/react";
 import { motion, Transition } from "framer-motion";
 import { FC, useEffect, useState } from "react";
 import { FaEraser, FaPaperPlane, FaUndo } from "react-icons/fa";
-import { Hex, isHex, keccak256, toHex } from "viem";
-import { useBlockNumber, useWaitForTransactionReceipt } from "wagmi";
+import { decodeFunctionResult, Hex, isAddress, isHex, keccak256, toHex } from "viem";
+import { useWaitForTransactionReceipt } from "wagmi";
+import { ResultModal } from "./ResultModal";
 import { ThemeSelector } from "./ThemeSelector";
 import { ValidThemes } from "./themes";
+import { SubmissionData } from "./types";
 import { useCanvas } from "./useCanvas";
 
 const transition: Transition = {
@@ -24,55 +26,61 @@ const transition: Transition = {
 
 const preparePayload = (dataUrl: string, theme: string) => {
     const [_mimeEncoding, data] = dataUrl.split(",");
-    return toHex(JSON.stringify({ image: data, theme }));
+    const payload = { image: data, theme };
+    console.log("Preparing payload", payload);
+    return toHex(JSON.stringify(payload));
 };
 
-const useWatchQueryOnBlockChange = (queryKey: readonly unknown[]) => {
-    const queryClient = useQueryClient();
-    const { data: blockNumber } = useBlockNumber({ watch: true });
-
-    useEffect(() => {
-        queryClient.invalidateQueries({ queryKey });
-    }, [blockNumber, queryClient, queryKey]);
-};
-
-const useResultReader = () => {
-    const [payload, setPayload] = useState<Hex | null>(null);
-
-    if (isHex(payload)) {
-        console.log(`watching notice for payload: ${payload}`);
-    }
-
-    const keccakked = isHex(payload) ? keccak256(payload) : null;
-
-    const noticeResult = useReadTaskManagerGetNoticeResult({
-        args: [keccakked!],
-        query: {
-            enabled: isHex(keccakked),
-        },
+const decodeNotice = (encodedNotice: Hex) => {
+    const [result, theme, classes, probabilities] = decodeFunctionResult({
+        abi: taskManagerAbi,
+        functionName: "decodeNoticeData",
+        data: encodedNotice,
     });
 
-    console.log(` START NOTICE RESULT ${new Date().toISOString()}`);
-    console.log(noticeResult.data);
-    console.log("END NOTICE RESULT");
-
-    useWatchQueryOnBlockChange(noticeResult.queryKey);
-
-    return {
-        watchResultForPayload: setPayload,
+    const notice = {
+        passed: true,
+        theme,
+        confidence: result,
+        predictions: classes.map((name, i) => {
+            return {
+                theme: name,
+                probability: probabilities[i],
+            };
+        }),
     };
+
+    return notice;
 };
 
 export const Scribbl: FC = () => {
-    const [downloadLink, setDownloadLink] = useState<string | null>();
     const [canvasAnimationEnded, setCanvasAnimationEnded] = useState<boolean>(false);
-    const { isConnected, isReadyToSendTransaction, openChainModal, openConnectModal } = useWallet();
+    const { isConnected, isReadyToSendTransaction, openChainModal, openConnectModal, address } =
+        useWallet();
     const [payload, setPayload] = useState<Hex | null>(null);
-    const { watchResultForPayload } = useResultReader();
     const [theme, setTheme] = useState<ValidThemes>("circle");
-
     const { clearCanvas, hasContent, prepareToExport, removeLastEntry, canvasRef, isReady } =
         useCanvas();
+    const [submissionData, setSubmissionData] = useState<SubmissionData>({ state: "idle" });
+
+    useWatchTaskManagerNoticeReceivedEvent({
+        args: {
+            payloadHash: submissionData.payloadHash,
+            user: address,
+        },
+        enabled: submissionData.payloadHash !== null && isAddress(address ?? ""),
+        onLogs: (logs) => {
+            console.info("New logs", logs);
+            const [log] = logs;
+            try {
+                const notice = decodeNotice(log.args.notice!);
+                setSubmissionData({ state: "ready", result: notice });
+            } catch (error) {
+                console.error(`Error when trying to decode the notice`, error);
+                setSubmissionData({ state: "errored" });
+            }
+        },
+    });
 
     const prepare = useSimulateTaskManagerRunExecution({
         args: [payload!],
@@ -87,21 +95,42 @@ export const Scribbl: FC = () => {
     });
 
     const canSubmit =
-        isReadyToSendTransaction && isHex(payload) && !prepare.isLoading && prepare.error === null;
+        isReadyToSendTransaction &&
+        isHex(payload) &&
+        !prepare.isLoading &&
+        prepare.error === null &&
+        execute.error === null;
     const isSubmitting = prepare.isLoading || execute.isPending || wait.isLoading;
 
-    // debugging
+    if (execute.error) {
+        console.error("Write error", execute.error);
+    }
+
     if (prepare.error) {
-        console.error(prepare.error);
+        console.error("Simulate error", prepare.error);
     }
 
     useEffect(() => {
+        // submission and watching for results from coprocessor
         if (canSubmit) {
             console.log("Executing...");
-            watchResultForPayload(payload);
-            execute.writeContract(prepare.data!.request);
+            execute.writeContract(prepare.data!.request, {
+                onSuccess: () => {
+                    setSubmissionData((current) => ({
+                        ...current,
+                        payloadHash: keccak256(payload),
+                        state: "pending",
+                    }));
+                },
+                onError: (_err) => {
+                    setSubmissionData({ state: "idle" });
+                    setPayload(null);
+                    execute.reset();
+                    prepare.refetch();
+                },
+            });
         }
-    }, [canSubmit, payload, watchResultForPayload, isConnected]);
+    }, [canSubmit, payload, isConnected]);
 
     useEffect(() => {
         if (wait.isSuccess) {
@@ -110,10 +139,6 @@ export const Scribbl: FC = () => {
             execute.reset();
         }
     }, [wait, clearCanvas]);
-
-    useEffect(() => {
-        if (!hasContent) setDownloadLink(null);
-    }, [hasContent]);
 
     return (
         <div style={{ overflow: canvasAnimationEnded ? "visible" : "hidden" }}>
@@ -168,14 +193,9 @@ export const Scribbl: FC = () => {
                                 onPress={() => {
                                     if (hasContent) {
                                         if (isReadyToSendTransaction) {
+                                            console.log("setting payload", theme);
                                             const dataUrl = prepareToExport();
-                                            setDownloadLink(dataUrl);
-                                            setPayload(
-                                                preparePayload(
-                                                    dataUrl,
-                                                    theme?.toLowerCase() ?? "circle",
-                                                ),
-                                            );
+                                            setPayload(preparePayload(dataUrl, theme));
                                         } else {
                                             if (!isConnected)
                                                 openConnectModal && openConnectModal();
@@ -193,14 +213,13 @@ export const Scribbl: FC = () => {
                         ref={canvasRef}
                         className={canvasAnimationEnded ? "scribbl-canvas-shadow" : ""}
                     />
-
-                    {downloadLink && (
-                        <Link color="foreground" href={downloadLink} download="scribbl.png">
-                            Download Drawing
-                        </Link>
-                    )}
                 </div>
             </motion.div>
+
+            <ResultModal
+                submissionData={submissionData}
+                onClose={() => setSubmissionData({ state: "idle" })}
+            />
         </div>
     );
 };
