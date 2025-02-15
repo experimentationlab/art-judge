@@ -19,7 +19,7 @@ To run the app, you'll need to spin up the backend and then run the UI.
 
 ### Step 2: Running the UI
 
-- `ui`: Navigate to this directory and follow the instructions in the [README](./ui/README.md).
+- `ui`: Navigate to this directory and follow the instructions in the [README](./ui/README.md)
 
 
 
