@@ -1,5 +1,6 @@
 "use client";
 import { useReadTaskManagerGetLeaderboard } from "@/contracts/generated/scribbleTaskManager";
+import { useRefetchOnBlockChange } from "@/hooks/useRefetchOnBlockChange";
 import {
     getKeyValue,
     Link,
@@ -62,7 +63,9 @@ const prepareResults = (rawData: RawData): Result[] => {
 
 const useGetLeaderboardResults = () => {
     const [results, setResults] = useState<Result[]>([]);
-    const { isLoading, data, error } = useReadTaskManagerGetLeaderboard();
+    const { isLoading, data, error, queryKey } = useReadTaskManagerGetLeaderboard();
+
+    useRefetchOnBlockChange(queryKey);
 
     if (error) console.error(error);
 
