@@ -23,5 +23,8 @@ declare namespace NodeJS {
          * The coprocessor caller contract address
          */
         NEXT_PUBLIC_COPROCESSOR_CALLER_ADDRESS: string;
+
+        NEXT_PUBLIC_WWW_DOMAIN: string;
+        NEXT_PUBLIC_PLAUSIBLE_DOMAIN: string;
     }
 }
