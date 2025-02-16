@@ -82,8 +82,6 @@ export const Scribbl: FC = () => {
         },
     });
 
-    console.log(`selected theme: ${theme}`);
-
     const prepare = useSimulateTaskManagerRunExecution({
         args: [payload!],
         query: {
@@ -143,7 +141,7 @@ export const Scribbl: FC = () => {
     }, [wait, clearCanvas]);
 
     return (
-        <div style={{ overflow: canvasAnimationEnded ? "visible" : "hidden" }}>
+        <div style={{ overflow: canvasAnimationEnded ? "visible" : "hidden" }} className="pb-10">
             <motion.div
                 initial={{ y: -520 }}
                 animate={isReady ? { y: 0 } : false}
@@ -153,10 +151,10 @@ export const Scribbl: FC = () => {
                 }}
             >
                 <div className="flex flex-col gap-2">
-                    <div className="py-3">
+                    <div className="p-3 sm:py-3 sm:px-0">
                         <ThemeSelector onValueChange={setTheme} selectedTheme={theme} />
                     </div>
-                    <div className="flex justify-between gap-1">
+                    <div className="flex justify-between gap-1 px-3 sm:px-0">
                         <div className="flex gap-1">
                             <Button
                                 color="warning"
@@ -195,7 +193,6 @@ export const Scribbl: FC = () => {
                                 onPress={() => {
                                     if (hasContent) {
                                         if (isReadyToSendTransaction) {
-                                            console.log("setting payload", theme);
                                             const dataUrl = prepareToExport();
                                             setPayload(preparePayload(dataUrl, theme));
                                         } else {
