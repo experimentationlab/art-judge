@@ -17,3 +17,11 @@ export interface SubmissionData {
     result?: Result;
     payloadHash?: Hex;
 }
+
+type Predictions = readonly [
+    { class: string; probability: bigint },
+    { class: string; probability: bigint },
+    { class: string; probability: bigint },
+];
+
+export type NoticeResult = [boolean, string, bigint, Predictions];

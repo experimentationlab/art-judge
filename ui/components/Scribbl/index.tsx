@@ -1,21 +1,21 @@
 "use client";
 import useWallet from "@/components/Wallet/useWallet";
 import {
-    taskManagerAbi,
+    useReadTaskManagerGetNoticeResult,
     useSimulateTaskManagerRunExecution,
-    useWatchTaskManagerNoticeReceivedEvent,
     useWriteTaskManagerRunExecution,
 } from "@/contracts/generated/scribbleTaskManager";
+import { useRefetchOnBlockChange } from "@/hooks/useRefetchOnBlockChange";
 import { Button, Tooltip } from "@heroui/react";
 import { motion, Transition } from "framer-motion";
-import { FC, useEffect, useState } from "react";
+import { Dispatch, FC, SetStateAction, useEffect, useState } from "react";
 import { FaEraser, FaPaperPlane, FaUndo } from "react-icons/fa";
-import { decodeFunctionResult, Hex, isAddress, isHex, keccak256, toHex } from "viem";
+import { Hex, isHex, keccak256, toHex } from "viem";
 import { useWaitForTransactionReceipt } from "wagmi";
 import { ResultModal } from "./ResultModal";
 import { ThemeSelector } from "./ThemeSelector";
 import { ValidThemes } from "./themes";
-import { SubmissionData } from "./types";
+import { NoticeResult, SubmissionData } from "./types";
 import { useCanvas } from "./useCanvas";
 
 const transition: Transition = {
@@ -31,26 +31,52 @@ const preparePayload = (dataUrl: string, theme: string) => {
     return toHex(JSON.stringify(payload));
 };
 
-const decodeNotice = (encodedNotice: Hex) => {
-    const [result, theme, classes, probabilities] = decodeFunctionResult({
-        abi: taskManagerAbi,
-        functionName: "decodeNoticeData",
-        data: encodedNotice,
-    });
+const prepareNotice = (noticeResult: NoticeResult) => {
+    const [passed, theme, confidence, probabilities] = noticeResult;
 
     const notice = {
-        passed: true,
+        passed,
         theme,
-        confidence: result,
-        predictions: classes.map((name, i) => {
+        confidence,
+        predictions: probabilities.map(({ class: theme, probability }) => {
             return {
-                theme: name,
-                probability: probabilities[i],
+                theme,
+                probability,
             };
         }),
     };
 
     return notice;
+};
+
+const useReadNoticeResult = (
+    submissionData: SubmissionData,
+    updater: Dispatch<SetStateAction<SubmissionData>>,
+) => {
+    const watchResult = submissionData.state === "pending" && isHex(submissionData.payloadHash);
+    const { data, error, queryKey } = useReadTaskManagerGetNoticeResult({
+        args: [submissionData.payloadHash!],
+        query: {
+            enabled: watchResult,
+        },
+    });
+
+    useRefetchOnBlockChange(queryKey, { watch: watchResult, numberOfBlocks: 1n });
+
+    useEffect(() => {
+        if (error) {
+            console.error(`Error when trying to read the notice result`, error);
+            updater({ state: "errored" });
+            return;
+        }
+
+        if (watchResult && data !== undefined) {
+            const notice = prepareNotice(data as NoticeResult);
+            if (notice.theme !== "") {
+                updater({ state: "ready", result: notice });
+            }
+        }
+    }, [watchResult, data, error]);
 };
 
 export const Scribbl: FC = () => {
@@ -63,24 +89,7 @@ export const Scribbl: FC = () => {
         useCanvas();
     const [submissionData, setSubmissionData] = useState<SubmissionData>({ state: "idle" });
 
-    useWatchTaskManagerNoticeReceivedEvent({
-        args: {
-            payloadHash: submissionData.payloadHash,
-            user: address,
-        },
-        enabled: submissionData.payloadHash !== null && isAddress(address ?? ""),
-        onLogs: (logs) => {
-            console.info("New logs", logs);
-            const [log] = logs;
-            try {
-                const notice = decodeNotice(log.args.notice!);
-                setSubmissionData({ state: "ready", result: notice });
-            } catch (error) {
-                console.error(`Error when trying to decode the notice`, error);
-                setSubmissionData({ state: "errored" });
-            }
-        },
-    });
+    useReadNoticeResult(submissionData, setSubmissionData);
 
     const prepare = useSimulateTaskManagerRunExecution({
         args: [payload!],

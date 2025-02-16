@@ -150,6 +150,7 @@ export const ResultModal: FC<Props> = ({ submissionData, onClose }) => {
         <Modal
             isOpen={isOpen}
             placement="auto"
+            hideCloseButton
             backdrop="blur"
             size="2xl"
             onOpenChange={(isOpen) => {
