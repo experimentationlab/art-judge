@@ -15,15 +15,22 @@ export const ThemeSelector: FC<Props> = ({ selectedTheme, onValueChange }) => {
 
     return (
         <Select
-            label="Theme"
+            label="Theme Selector"
+            description={
+                <span className="bold text-primary-700 text-xl">
+                    Click and select a theme you like.
+                </span>
+            }
+            size="sm"
             placeholder="Select your favorite theme"
             classNames={{ value: "capitalize" }}
             selectedKeys={[selectedTheme]}
             onChange={handleSelection}
             selectionMode="single"
+            variant="faded"
+            scrollShadowProps={{}}
             disallowEmptySelection
             startContent={<FaPalette />}
-            radius="none"
         >
             {themes.map((theme) => (
                 <SelectItem key={theme.key} className="capitalize">

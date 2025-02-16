@@ -18,15 +18,8 @@
     box-shadow: 0px 0.3rem 13px rgba(0, 0, 0, 0.7);
 }
 
-html,
-body,
-body > *,
-div[data-overlay-container="true"] {
-    height: 100%;
-}
-
-body > * {
-    height: 100%;
+*:not(#background):not(nav) {
+    z-index: 0;
 }
 
 body {

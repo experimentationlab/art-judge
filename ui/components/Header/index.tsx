@@ -30,6 +30,7 @@ const Header: FC = () => {
             isBordered
             isMenuOpen={isMenuOpen}
             onMenuOpenChange={setIsMenuOpen}
+            shouldHideOnScroll
         >
             <NavbarMenuToggle
                 aria-label={isMenuOpen ? "Close menu" : "Open menu"}
@@ -47,11 +48,7 @@ const Header: FC = () => {
             <NavbarContent className="hidden sm:flex gap-4" justify="center">
                 {menuItems.map((item, index) => (
                     <NavbarItem key={`${item.name}-${index}`}>
-                        <Link
-                            color="foreground"
-                            href={item.path}
-                            className="uppercase"
-                        >
+                        <Link color="foreground" href={item.path} className="uppercase">
                             {item.name}
                         </Link>
                     </NavbarItem>
@@ -68,11 +65,7 @@ const Header: FC = () => {
                         key={`menu-item-${item.name}-${index}`}
                         onClick={() => setIsMenuOpen(false)}
                     >
-                        <Link
-                            className="w-full"
-                            color="foreground"
-                            href={item.path}
-                        >
+                        <Link className="w-full" color="foreground" href={item.path}>
                             {item.name}
                         </Link>
                     </NavbarMenuItem>

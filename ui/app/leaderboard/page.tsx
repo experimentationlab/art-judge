@@ -1,10 +1,10 @@
 import { GlobalLeaderboard } from "@/components/GlobalLeaderboard";
+import { PageLayout } from "@/components/Layout/PageLayout";
 
 export default function Leaderboard() {
     return (
-        <main className="flex flex-col items-center sm:items-center py-32 justify-center">
-            <h1 className="text-5xl pb-8">Global Leaderboard</h1>
+        <PageLayout title="Global Leaderboard">
             <GlobalLeaderboard />
-        </main>
+        </PageLayout>
     );
 }

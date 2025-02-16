@@ -82,6 +82,8 @@ export const Scribbl: FC = () => {
         },
     });
 
+    console.log(`selected theme: ${theme}`);
+
     const prepare = useSimulateTaskManagerRunExecution({
         args: [payload!],
         query: {
@@ -151,7 +153,7 @@ export const Scribbl: FC = () => {
                 }}
             >
                 <div className="flex flex-col gap-2">
-                    <div className="py-3 w-full">
+                    <div className="py-3">
                         <ThemeSelector onValueChange={setTheme} selectedTheme={theme} />
                     </div>
                     <div className="flex justify-between gap-1">
