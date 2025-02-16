@@ -65,7 +65,7 @@ const useGetLeaderboardResults = () => {
     const [results, setResults] = useState<Result[]>([]);
     const { isLoading, data, error, queryKey } = useReadTaskManagerGetLeaderboard();
 
-    useRefetchOnBlockChange(queryKey);
+    useRefetchOnBlockChange(queryKey, { numberOfBlocks: 5n });
 
     if (error) console.error(error);
 
