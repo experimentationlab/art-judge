@@ -1,0 +1,22 @@
+{
+    "name": "Scribbl",
+    "iconPath": "scribbl-logo-alt.png",
+    "description": "Play in a fun game by unleashing your doodling skills get scored by an unbiased AI judge.",
+    "providedBy": { "name": "Scribbl", "url": "https://scribbl.fun" },
+    "theme_color": "black",
+    "background_color": "white",
+    "display": "standalone",
+    "start_url": ".",
+    "icons": [
+        {
+            "src": "scribbl-logo-alt.png",
+            "sizes": "800x800",
+            "type": "image/png"
+        },
+        {
+            "src": "scribbl-logo.png",
+            "sizes": "555x433",
+            "type": "image/png"
+        }
+    ]
+}
