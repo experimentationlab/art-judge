@@ -17,7 +17,7 @@ export default {
                 large: "2rem",
             },
             colors: {
-                background: "var(--background)",
+                background: "transparent",
                 foreground: "var(--foreground)",
             },
         },

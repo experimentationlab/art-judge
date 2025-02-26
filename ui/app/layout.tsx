@@ -53,11 +53,11 @@ export default function RootLayout({
                 className={`${gamjamRegular.className} antialiased custom text-foreground bg-background`}
             >
                 <Plausible />
+                <div
+                    id="background"
+                    className="fixed top-0 bottom-0 left-0 right-0 bg-gradient-to-br from-primary-100 to-secondary-500 -z-10"
+                ></div>
                 <Providers>
-                    <div
-                        id="background"
-                        className="fixed top-0 bottom-0 left-0 right-0 bg-gradient-to-br from-primary-100 to-secondary-500"
-                    ></div>
                     <Header />
                     {children}
                 </Providers>
