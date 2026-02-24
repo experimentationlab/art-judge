@@ -21,6 +21,5 @@ To run the app, you'll need to spin up the backend and then run the UI.
 
 - `ui`: Navigate to this directory and follow the instructions in the [README](./ui/README.md)
 
-
-
-
+## Resources
+- Check out our [presentation slides](https://github.com/googlecreativelab/quickdraw-dataset) for a visual overview of Scribbl.
